@@ -1,27 +1,446 @@
 ---
 title: "MA615 Midterm EDA"
 author: "Chenxuan Xiong"
-format: docx
+format: html
 editor: visual
 ---
 
-## Quarto
+## Data acquisition and assessment
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+### NOAA Data
 
-## Running Code
+[NOAA Storm Events Database](https://www.ncdc.noaa.gov/stormevents/ftp.jsp)
 
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+### FEMA Data
 
-```{r}
-1 + 1
+[FEMA Datasets](https://www.fema.gov/about/openfema/data-sets)\
+[FEMA Dataset: Disaster Declarations Summaries - v2](https://www.fema.gov/openfema-data-page/disaster-declarations-summaries-v2)\
+[FEMA Dataset: FEMA Web Disaster Summaries - v1](https://www.fema.gov/openfema-data-page/disaster-declarations-summaries-v2)
+
+### Census Data
+
+[2020&2021 Population](https://learn.bu.edu/bbcswebdav/pid-13100775-dt-content-rid-95800262_1/xid-95800262_1)\
+[2020&2021 House](https://learn.bu.edu/bbcswebdav/pid-13100775-dt-content-rid-95800263_1/xid-95800263_1)\
+[2020&2021 Poverty](https://learn.bu.edu/bbcswebdav/pid-13100775-dt-content-rid-95800264_1/xid-95800264_1)\
+
+## Original Conditions:
+
+### Problems:
+
+#### Disaster Data:
+
+The records of floods are different among data sets. The flood analysis may depend on different data sets and it will be pointed out in the report.
+
+#### Census Data:
+
+Census data sets are not related to disaster data. They need to be merged together to build a connection by location (state, county, etc.). There are lots of null values in the population and poverty data.
+
+## Initial questions
+
+1.  In what season are floods likely to occur？
+2.  How expensive?
+3.  How dangerous are floods?
+
+## Assumptions and motivations:
+
+This exploratory data analysis (EDA) aims to identify the seasons and areas where floods are most likely to occur. This information can assist the government in taking preventive measures to mitigate or minimize casualties. Furthermore, it will reveal the financial burden associated with post-disaster reconstruction, highlighting the importance of preventive measures in the regional economy.
+
+A higher frequency of floods is expected to lead to a greater financial burden on the local government. This comprehensive EDA underscores the significance of flood prevention efforts.
+
+## Data cleaning
+
+```{r,message=FALSE,warning=FALSE}
+## Import packages
+library(ggplot2)
+library(readr)
+library(dplyr)
+library(lubridate)
+library(stringr)
+
+## Load data
+DeclarationDenials <- read_csv("DeclarationDenials (1).csv")
+DisasterDeclarationsSummaries <- read_csv("DisasterDeclarationsSummaries.csv")
+FemaWebDisasterDeclarations <- read_csv("FemaWebDisasterDeclarations.csv")
+FemaWebDisasterSummaries <- read_csv("FemaWebDisasterSummaries.csv")
+population_2020 <- read_csv("ACSDP5Y2020.DP05-Data.csv")
+population_2021 <- read_csv("ACSDP5Y2021.DP05-Data.csv")
+house_2020 <- read_csv("ACSDT5Y2020.B25001-Data.csv")
+house_2021 <- read_csv("ACSDT5Y2021.B25001-Data.csv")
+poverty_2020 <- read_csv("ACSST5Y2020.S1701-Data.csv")
+poverty_2021 <- read_csv("ACSST5Y2021.S1701-Data.csv")
+MissionAssignments <- read_csv("MissionAssignments.csv")
+StormEvents_details_2020 <- read_csv("StormEvents_details-ftp_v1.0_d2020_c20230927.csv")
+StormEvents_details_2021 <- read_csv("StormEvents_details-ftp_v1.0_d2021_c20231017.csv")
+fatalities_2020 <- read_csv("StormEvents_fatalities-ftp_v1.0_d2020_c20230927.csv")
+fatalities_2021 <- read_csv("StormEvents_fatalities-ftp_v1.0_d2021_c20231017.csv")
+
+## Data cleaning
+
+# Census data cleaning: Drop null columns
+cols_to_keep <- c("GEO_ID", "NAME")
+
+#Population 2020
+population_2020_clean <- population_2020
+population_2020_clean[, setdiff(names(population_2020), cols_to_keep)] <- lapply(population_2020[, setdiff(names(population_2020), cols_to_keep)], as.numeric)
+population_2020_clean <- population_2020_clean[, colSums(is.na(population_2020_clean)) < nrow(population_2020_clean)]
+population_2020_clean <- population_2020_clean[-1,]
+population_2020_clean <- population_2020_clean %>%
+  mutate(state = str_extract(NAME, "(?<=,\\s)[^,]+$"))
+population_2020_clean1 <- population_2020_clean[, c(1,2,dim(population_2020_clean)[2],seq(3,dim(population_2020_clean)[2],2))] 
+
+#Population 2021
+population_2021_clean <- population_2021
+population_2021_clean[, setdiff(names(population_2021), cols_to_keep)] <- lapply(population_2021[, setdiff(names(population_2021), cols_to_keep)], as.numeric)
+population_2021_clean <- population_2021_clean[, colSums(is.na(population_2021_clean)) < nrow(population_2021_clean)]
+population_2021_clean <- population_2021_clean[-1,]
+population_2021_clean <- population_2021_clean %>%
+  mutate(state = str_extract(NAME, "(?<=,\\s)[^,]+$"))
+population_2021_clean1 <- population_2021_clean[, c(1,2,dim(population_2021_clean)[2],seq(3,dim(population_2021_clean)[2],2))] 
+
+
+
+#House 2020
+house_2020_clean <- house_2020
+house_2020_clean[, setdiff(names(house_2020), cols_to_keep)] <- lapply(house_2020[, setdiff(names(house_2020), cols_to_keep)], as.numeric)
+house_2020_clean <- house_2020_clean[, colSums(is.na(house_2020_clean)) < nrow(house_2020_clean)]
+house_2020_clean <- house_2020_clean[-1,]
+house_2020_clean <- house_2020_clean %>%
+  mutate(state = str_extract(NAME, "(?<=,\\s)[^,]+$"))
+
+#House 2021
+house_2021_clean <- house_2021
+house_2021_clean[, setdiff(names(house_2021), cols_to_keep)] <- lapply(house_2021[, setdiff(names(house_2021), cols_to_keep)], as.numeric)
+house_2021_clean <- house_2021_clean[, colSums(is.na(house_2021_clean)) < nrow(house_2021_clean)]
+house_2021_clean <- house_2021_clean[-1,]
+house_2021_clean <- house_2021_clean %>%
+  mutate(state = str_extract(NAME, "(?<=,\\s)[^,]+$"))
+
+
+
+#Poverty 2020
+poverty_2020_clean <- poverty_2020
+poverty_2020_clean[, setdiff(names(poverty_2020), cols_to_keep)] <- lapply(poverty_2020[, setdiff(names(poverty_2020), cols_to_keep)], as.numeric)
+poverty_2020_clean <- poverty_2020_clean[, colSums(is.na(poverty_2020_clean)) < nrow(poverty_2020_clean)]
+poverty_2020_clean <- poverty_2020_clean[-1,]
+poverty_2020_clean <- poverty_2020_clean %>%
+  mutate(state = str_extract(NAME, "(?<=,\\s)[^,]+$"))
+poverty_2020_clean1 <- poverty_2020_clean[, c(1,2,dim(poverty_2020_clean)[2],seq(3,dim(poverty_2020_clean)[2],2))] 
+
+
+
+#Poverty 2021
+poverty_2021_clean <- poverty_2021
+poverty_2021_clean[, setdiff(names(poverty_2021), cols_to_keep)] <- lapply(poverty_2021[, setdiff(names(poverty_2021), cols_to_keep)], as.numeric)
+poverty_2021_clean <- poverty_2021_clean[, colSums(is.na(poverty_2021_clean)) < nrow(poverty_2021_clean)]
+poverty_2021_clean <- poverty_2021_clean[-1,]
+poverty_2021_clean <- poverty_2021_clean %>%
+  mutate(state = str_extract(NAME, "(?<=,\\s)[^,]+$"))
+poverty_2021_clean1 <- poverty_2021_clean[, c(1,2,dim(poverty_2021_clean)[2],seq(3,dim(poverty_2021_clean)[2],2))] 
+
+
+
+
+# Merge populaion, house, poverty
+Merged_census_2020 <- merge(merge(population_2020_clean, house_2020_clean, by = "NAME", all = TRUE),poverty_2020_clean,by = "NAME", all = TRUE)
+Merged_census_2020 <- Merged_census_2020 |>
+  select(GEO_ID,NAME,state,DP05_0001E,B25001_001E,S1701_C01_001E)
+
+
+Merged_census_2021 <- merge(merge(population_2021_clean, house_2021_clean, by = "NAME", all = TRUE),poverty_2021_clean,by = "NAME", all = TRUE)
+Merged_census_2021 <- Merged_census_2021 |>
+  select(GEO_ID,NAME,state,DP05_0001E,B25001_001E,S1701_C01_001E)
+
+
+
+# Declaration Denials cleaning: Select requested incident types == Flood
+DeclarationDenials_clean <- DeclarationDenials |>
+  filter(requestedIncidentTypes == "Flood")
+# Select data between 2020/01/01 - 2021/12/31
+DeclarationDenials_clean <- DeclarationDenials_clean %>%
+  filter(incidentBeginDate > as.POSIXct("2020-01-11 00:00:00") & incidentBeginDate < as.POSIXct("2021-12-31 23:59:59"))
+
+
+# Disaster Declarations Summaries cleaning: Select incident types == Flood
+DisasterDeclarationsSummaries_clean <- DisasterDeclarationsSummaries |>
+  filter(incidentType == "Flood")|>
+  rename(stateAbbreviation= state)
+# Merge Declaration with state
+state_abb <- distinct(DeclarationDenials[c("stateAbbreviation","state")])
+DisasterDeclarationsSummaries_with_state <- left_join(DisasterDeclarationsSummaries_clean,state_abb,by = "stateAbbreviation")
+# Select data between 2020/01/01 - 2021/12/31
+DisasterDeclarationsSummaries_with_state_clean <- DisasterDeclarationsSummaries_with_state %>%
+  filter(incidentBeginDate > as.POSIXct("2020-01-11 00:00:00") & incidentBeginDate < as.POSIXct("2021-12-31 23:59:59"))
+
+
+
+# Merge Declaration with state
+
+# Fema Web Disaster Declarations cleaning: Select incident types == Flood
+FemaWebDisasterDeclarations_clean <- FemaWebDisasterDeclarations |>
+  filter(incidentType == "Flood")
+# Select data between 2020/01/01 - 2021/12/31
+FemaWebDisasterDeclarations_clean <- FemaWebDisasterDeclarations_clean %>%
+  filter(incidentBeginDate > as.POSIXct("2020-01-11 00:00:00") & incidentBeginDate < as.POSIXct("2021-12-31 23:59:59"))
+
+
+#Fema Web Disaster Summaries cleaning: merge to FemaWebDisasterDeclarations_clean by disater number
+dstr_num <- FemaWebDisasterDeclarations_clean$disasterNumber
+FemaWebDisasterSummaries_clean <- FemaWebDisasterSummaries |>
+  filter(disasterNumber %in% dstr_num)
+
+
+
+#Mission assignment
+# Select data between 2020/01/01 - 2021/12/31
+MissionAssignments_clean <- MissionAssignments %>%
+  filter(dateRequested > as.POSIXct("2020-01-11 00:00:00") & dateRequested < as.POSIXct("2021-12-31 23:59:59"))%>%
+  rename(stateAbbreviation= stateorTribe)
+MissionAssignments_clean <- left_join(MissionAssignments_clean,state_abb,by = "stateAbbreviation")
+MissionAssignments_clean <- MissionAssignments_clean |>
+  filter(disasterDescription == "Flood")
+
+##details cleaning: select flood cases
+StormEvents_details_2020_clean <- StormEvents_details_2020[!is.na(StormEvents_details_2020$FLOOD_CAUSE), ]
+StormEvents_details_2021_clean <- StormEvents_details_2021[!is.na(StormEvents_details_2021$FLOOD_CAUSE), ]
+
+##fatalities cleaning:
+fatalities_with_detail_2020 <- left_join(StormEvents_details_2020_clean,fatalities_2020,by = "EVENT_ID")
+fatalities_with_detail_2021 <- left_join(StormEvents_details_2021_clean,fatalities_2021,by = "EVENT_ID")
+
 ```
 
-You can add options to executable code like this
+## EDA 
+
+####  1. In what season are floods likely to occur?\
+(These flood records are based on [FEMA Disaster Declarations Summaries data](https://www.fema.gov/openfema-data-page/disaster-declarations-summaries-v2))\
 
 ```{r}
-#| echo: false
-2 * 2
+DisasterDeclarationsSummaries_with_state_clean$Month <- month(DisasterDeclarationsSummaries_with_state_clean$incidentBeginDate)
+get_season <- function(month) {
+  if (month %in% 3:5) {
+    return("Spring")
+  } else if (month %in% 6:8) {
+    return("Summer")
+  } else if (month %in% 9:11) {
+    return("Autumn")
+  } else {
+    return("Winter")
+  }
+}
+DisasterDeclarationsSummaries_with_state_clean$Season <- sapply(DisasterDeclarationsSummaries_with_state_clean$Month, get_season)
+ggplot(DisasterDeclarationsSummaries_with_state_clean) +
+  aes(x = Season) +
+  geom_bar(fill = "#112446") +
+  labs(title = "Flood count in different season") +
+  theme_minimal()
+
+ggplot(DisasterDeclarationsSummaries_with_state_clean) +
+  aes(x = state, fill = Season) +
+  geom_bar() +
+  scale_fill_hue(direction = 1) +
+  labs(title = "Flood count in different season in each state") +
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+The results show that winter is the flood-prone season. During the winter months, Kentucky and Washington, in particular, should be vigilant regarding precipitation. In the spring, North Dakota and Louisiana should prepare for potential floods.
+
+
+
+#### 2. How expensive?
+(These flood records are obtained from [FEMA Mission Assignment data](https://www.fema.gov/about/openfema/data-sets))
+
+```{r}
+#flood frequency based on mission assignment data
+dstr_freq <- MissionAssignments_clean %>%
+  group_by(state) %>%
+  summarize(Count = n())
+
+obligation_sum <- MissionAssignments_clean |>
+  group_by(state) |>
+  summarise(obligation_total = sum(obligationAmount))
+
+
+
+census_sum_2020 <- Merged_census_2020 %>%
+  group_by(state) %>%
+  summarize(population2020 = sum(DP05_0001E), house2020 = sum(B25001_001E), poverty2020 = sum(S1701_C01_001E))
+
+census_sum_2021 <- Merged_census_2021 %>%
+  group_by(state) %>%
+  summarize(population2021 = sum(DP05_0001E), house2021 = sum(B25001_001E), poverty2021 = sum(S1701_C01_001E))
+
+merge_flood_census <- left_join(left_join(dstr_freq,census_sum_2020,by = "state"),census_sum_2021,by = "state")
+tmp1 <- right_join(right_join(dstr_freq,census_sum_2020,by = "state"),census_sum_2021,by = "state")
+tmp2 <- right_join(dstr_freq,obligation_sum,by = "state")
+house_per_person2020 <- tmp1$house2020/tmp1$population2020
+house_per_person2021 <- tmp1$house2021/tmp1$population2021
+
+#state vs obligation to see the expense
+ggplot(tmp2) +
+  aes(x = state, y = obligation_total, colour = Count) +
+  geom_point(shape = "circle", size = 4L) +
+  scale_color_viridis_c(option = "viridis", direction = 1) +
+  labs(
+    x = "State",
+    y = "Obligation Amount",
+    title = "Obligation amount in different states",
+    color = "Flood Frequency"
+  ) +
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+```
+
+ The plot reveals a clear correlation: areas with lower flood frequency tend to have lower financial obligations, while areas with an extremely high flood frequency face obligations exceeding 8,000,000. Such substantial obligations can impose economic pressure on local governments.   
+
+ Additionally, I examined the connection between flood occurrence frequency and changes in the poverty rate and the number of houses between 2020 and 2021. My initial expectation was that higher flood frequency would lead to an increased poverty rate and a reduction in the number of houses. However, the results do not demonstrate a strong relationship between these factors.\
+(The records of floods are from[FEMA Disaster Declarations Summaries data](https://www.fema.gov/openfema-data-page/disaster-declarations-summaries-v2))\
+
+```{r, warning=FALSE}
+poverty_rate_race_2020 <- subset(poverty_2020_clean1, select = grep("_C03_", names(poverty_2020_clean1)))[,seq(13,21)]
+poverty_rate_2020 <- subset(poverty_2020_clean1, select = grep("_C03_", names(poverty_2020_clean1)))[,1]
+colnames(poverty_rate_race_2020) <- c("White Alone","Black or African American alone","American Indian and Alaska Native alone","Asian alone","Native Hawaiian and Other Pacific Islander alone","Some other race alone","Two or more races","Hispanic or Latino origin (of any race)","White alone, not Hispanic or Latino")
+
+poverty_rate_race_2020 <- poverty_rate_race_2020 |>
+  mutate(state = poverty_2020_clean1$state)
+poverty_rate_2020 <- poverty_rate_2020 |>
+  mutate(state = poverty_2020_clean1$state)
+
+poverty_rate_race_2021 <- subset(poverty_2021_clean1, select = grep("_C03_", names(poverty_2021_clean1)))[,seq(13,21)]
+poverty_rate_2021 <- subset(poverty_2021_clean1, select = grep("_C03_", names(poverty_2021_clean1)))[,1]
+colnames(poverty_rate_race_2021) <- c("White Alone","Black or African American alone","American Indian and Alaska Native alone","Asian alone","Native Hawaiian and Other Pacific Islander alone","Some other race alone","Two or more races","Hispanic or Latino origin (of any race)","White alone, not Hispanic or Latino")
+
+poverty_rate_race_2021 <- poverty_rate_race_2021 |>
+  mutate(state = poverty_2021_clean1$state)
+poverty_rate_2021 <- poverty_rate_2021 |>
+  mutate(state = poverty_2021_clean1$state)
+
+
+avg_rate_state_2020 <- poverty_rate_race_2020 |>
+  group_by(state) |>
+  summarize(across(!contains("state"), mean))
+
+avg_whole_rate_state_2020 <- poverty_rate_2020 |>
+  group_by(state) |>
+  summarize(across(!contains("state"), mean))
+
+
+avg_rate_state_2021 <- poverty_rate_race_2021 |>
+  group_by(state) |>
+  summarize(across(!contains("state"), mean))
+
+avg_whole_rate_state_2021 <- poverty_rate_2021 |>
+  group_by(state) |>
+  summarize(across(!contains("state"), mean))
+
+
+floodstate_poverty_rate <- left_join(left_join(dstr_freq,avg_whole_rate_state_2020, by = "state"),avg_whole_rate_state_2021, by = "state")
+floodstate_poverty_rate["difference"] <- floodstate_poverty_rate$S1701_C03_001E.y-floodstate_poverty_rate$S1701_C03_001E.x
+#plot of Poverty rate difference vs flood frequency in each state
+ggplot(floodstate_poverty_rate) +
+  aes(x = state, y = difference, colour = Count) +
+  geom_point(shape = "circle", size = 4L) +
+  scale_color_viridis_c(option = "viridis", direction = 1) +
+  labs(
+    x = "State",
+    y = "Poverty rate difference",
+    title = "Poverty rate difference vs flood frequency in each state",
+    color = "Flood frequency count"
+  ) +
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+
+##house differnece by state
+census_sum <- left_join(census_sum_2020,census_sum_2021,by = "state")
+census_sum["difference"] <- census_sum$house2021 - census_sum$house2020
+house_flood <- left_join(dstr_freq,census_sum, by = "state")
+
+ggplot(house_flood) +
+  aes(x = state, y = difference, colour = Count) +
+  geom_point(shape = "circle", size = 4L) +
+  scale_color_viridis_c(option = "viridis", direction = 1) +
+  labs(
+    x = "State",
+    y = "House count difference",
+    title = "The amount of houses vs frequency of flood",
+    color = "Flood frequency count"
+  ) +
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+```
+
+If there was a relationship, the point of Nebraska in both plots should be down to the very bottom. But there is no evidence showing there exists a relation.
+
+
+
+#### 3. How dangerous are floods?
+
+(These flood records are from [NOAA Storm Events Database](https://www.ncdc.noaa.gov/stormevents/ftp.jsp), debris flow is included since I regard it as a disaster caused by floods)\
+This plot shows the fatality location count in floods.\
+
+```{r}
+fatalities_with_detail_2020 <- left_join(StormEvents_details_2020_clean,fatalities_2020,by = "EVENT_ID")
+fatalities_with_detail_2021 <- left_join(StormEvents_details_2021_clean,fatalities_2021,by = "EVENT_ID")
+
+tmp3 <- na.omit(fatalities_with_detail_2020$FATALITY_LOCATION)
+
+tmp4 <- as.data.frame(table(tmp3))
+
+colnames(tmp4) <- c("location","freq")
+
+tmp5 <- na.omit(fatalities_with_detail_2021$FATALITY_LOCATION)
+
+tmp6 <- as.data.frame(table(tmp5))
+
+colnames(tmp6) <- c("location","freq")
+tmp7 <- rbind(tmp4,tmp6)
+
+
+ggplot(tmp7) +
+  aes(x = reorder(location,-freq), y = freq) +
+  geom_col(fill = "#112446") +
+  labs(
+    x = "Fatality location",
+    y = "Count",
+    title = "Fatality location count"
+  ) +
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+```
+
+ These results highlight that a significant portion of victims perished while in vehicles or towed trailers. Some of these cases may be attributed to debris flows, which can swiftly obstruct mountain roads, leaving drivers with insufficient time to react and avoid danger. Following closely, the second and third highest number of victims were found in water and permanent homes, respectively. Notably, residing in a home may not ensure safety if it is situated in a low-lying area.
+
+ Surprisingly, a minimal number of casualties occurred on boats, suggesting that actively seeking refuge or evacuation during flood events can yield more favorable outcomes. The accompanying figure depicts the fatality rates due to floods in different regions.
+
+```{r}
+fatalities_with_detail <- rbind(fatalities_with_detail_2020,fatalities_with_detail_2021)
+tmp8 <- fatalities_with_detail
+tmp8["fata_binary"] <- ifelse(is.na(tmp8$FATALITY_ID) == FALSE, 1,0)
+tmp8["flood_binary"] <- rep(1,dim(tmp8)[1])
+tmp9 <- tmp8 |>
+  group_by(STATE)|>
+  summarise(sum(fata_binary)/sum(flood_binary))
+tmp9 <- tmp9[tmp9$`sum(fata_binary)/sum(flood_binary)` != 0, ]
+
+
+ggplot(tmp9) +
+  aes(x = reorder(STATE,-`sum(fata_binary)/sum(flood_binary)`), y = `sum(fata_binary)/sum(flood_binary)`) +
+  geom_col(fill = "#4682B4") +
+  labs(
+    x = "State",
+    y = "Proportion of floods cause fatality",
+    title = "Proportion of floods result in fatality in each state"
+  ) +
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+The plot illustrates that New Jersey has the highest flood fatality rate, which may be attributed to specific geographical factors. States at the top of this ranking should take enhanced precautions and preparedness measures to address the elevated risk of floods.
+
+## Further Works
+
+To bolster the credibility of these findings, it is advisable to refine the flood records. While the overall poverty rate may not appear to be directly correlated with flood frequency, it is worth delving deeper into the data to discern potential variances among distinct communities, such as various racial groups and educational levels. By conducting a more in-depth analysis, we can uncover whether specific effects are present within these subsets of data.
